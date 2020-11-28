@@ -92,6 +92,7 @@ class Generator:
                 meta_size = TABLE_3[encoding_method][2]
             if meta_size + len(encoded_str) <= TABLE_2[self.CL][v]:
                 encoded_str = encoding_method.value + self.int_to_bin(encoded_length, meta_size) + encoded_str
+                encoded_str = '0' * (8 - (len(encoded_str) % 8)) + encoded_str
                 return v, encoded_str
 
     def encode(self, str_to_encode: str) -> None:
@@ -107,5 +108,46 @@ class Generator:
         else:
             raise UndefinedMethodException('Метод кодирования не определен')
 
-        binary = self.__add_meta(binary, encoding_method, len(str_to_encode))
-        print(binary)
+        version, binary = self.__add_meta(binary, encoding_method, len(str_to_encode))
+        blocks = self.__division_to_blocks(binary, version)
+        print(*map(len, blocks), sep='\n')
+
+    def __division_to_blocks(self, encoded_str: str, version: int) -> list[str]:
+        """
+        Делит на блоки
+        :param encoded_str: закодированная строка
+        :param version: версия
+        :return: Блоки и количество байт в них
+        """
+        block_count = TABLE_4[self.CL][version]
+        bytes_count = len(encoded_str) // 8
+        block_size, extra_bytes = divmod(bytes_count, block_count)
+        str_1, str_2 = encoded_str[:(block_count - extra_bytes) * block_size * 8], \
+                       encoded_str[(block_count - extra_bytes) * block_size * 8:]
+        blocks = [str_1[i * block_size: (i + 1) * block_size] for i in range(block_count - extra_bytes)]
+        blocks += [str_2[i * (block_size + 1): (i + 1) * (block_size + 1)] for i in range(extra_bytes)]
+        assert sum(map(len, blocks)) == len(encoded_str) // 8
+        return blocks
+
+    def __сorrection_bytes_creation(self, version, blocks):
+        corr_bytes_count = TABLE_5[self.CL][version]
+        polynom = TABLE_6[corr_bytes_count]
+        for block in blocks:
+            array = [int(block[i * 8: (i + 1) * 8], 2) for i in range(len(block) // 8)]
+
+            if corr_bytes_count > len(array):
+                array += [0] * (corr_bytes_count - len(array))
+
+            for el in array.copy():
+                a = array.pop(0)
+                array.append(0)
+                if a:
+                    b = TABLE_8[a]
+                    for i in range(corr_bytes_count):
+                        b += polynom[i]
+                        b %= 255
+
+
+
+
+
