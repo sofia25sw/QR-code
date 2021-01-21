@@ -1,9 +1,7 @@
 from re import fullmatch
 
-from utils.settings import *
-from utils.reg_ex import *
-from utils.tables import *
 from exceptions import *
+from utils import *
 from enums import *
 
 
@@ -19,6 +17,7 @@ class Generator:
         self.CL = correction_level
         self.encoding = encoding
 
+
     @staticmethod
     def __define_method(str_to_define: str) -> EncodingMethod:
         """
@@ -32,12 +31,14 @@ class Generator:
             return EncodingMethod.LETTER_DIGIT
         return EncodingMethod.BYTECODE
 
+
     @staticmethod
     def int_to_bin(number: int, addition: int = 0) -> str:
         b = bin(number).lstrip('0b')
         if addition:
             b = '0' * (addition - len(b)) + b
         return b
+
 
     def __encode_only_digit(self, str_to_encode: str) -> str:
         """
@@ -52,6 +53,7 @@ class Generator:
         groups = ''.join(groups)
         return groups
 
+
     def __encode_letter_digit(self, str_to_encode: str) -> str:
         """
         Кодирует строку
@@ -65,6 +67,7 @@ class Generator:
             groups.append(self.int_to_bin(TABLE_1.find(str_to_encode[-1]), 6))
         return ''.join(groups)
 
+
     def __encode_bytecode(self, str_to_encode: str) -> str:
         """
         Кодирует строку побайтово
@@ -73,6 +76,7 @@ class Generator:
         """
         byte = self.int_to_bin(int(str_to_encode.encode(self.encoding).hex(), 16))
         return byte
+
 
     def __add_meta(self, encoded_str: str, encoding_method: EncodingMethod, symbols_count: int) -> tuple[int, str]:
         """
@@ -95,6 +99,7 @@ class Generator:
                 encoded_str = '0' * (8 - (len(encoded_str) % 8)) + encoded_str
                 return v, encoded_str
 
+
     def encode(self, str_to_encode: str) -> None:
         if self.__define_method(str_to_encode) == EncodingMethod.ONLY_DIGIT:
             binary = self.__encode_only_digit(str_to_encode)
@@ -111,6 +116,7 @@ class Generator:
         version, binary = self.__add_meta(binary, encoding_method, len(str_to_encode))
         blocks = self.__division_to_blocks(binary, version)
         print(*map(len, blocks), sep='\n')
+
 
     def __division_to_blocks(self, encoded_str: str, version: int) -> list[str]:
         """
@@ -129,16 +135,24 @@ class Generator:
         assert sum(map(len, blocks)) == len(encoded_str) // 8
         return blocks
 
-    def __сorrection_bytes_creation(self, version, blocks):
+
+    def __correction_bytes_creation(self, version: int, blocks: list[str]):
+        """
+        Определяет сколько байтов коркоррекции надо создать, по количеству байтов определяет генерирующий многочлен
+        :param version: Версия кодирования
+        :param blocks: Список строк, представляющих собой блоки
+        :return: Готовая для печати на картинке строка битов
+        """
         corr_bytes_count = TABLE_5[self.CL][version]
         polynom = TABLE_6[corr_bytes_count]
+        corr_bytes = []
         for block in blocks:
             array = [int(block[i * 8: (i + 1) * 8], 2) for i in range(len(block) // 8)]
 
             if corr_bytes_count > len(array):
                 array += [0] * (corr_bytes_count - len(array))
 
-            for el in array.copy():
+            for _ in range(len(array)):
                 a = array.pop(0)
                 array.append(0)
                 if a:
@@ -146,8 +160,22 @@ class Generator:
                     for i in range(corr_bytes_count):
                         b += polynom[i]
                         b %= 255
+                        # побитовое сложеие
+                        c = TABLE_7[b]
+                        array[i] = c ^ array[i]
+            corr_bytes.append(array[:corr_bytes_count])
 
+        result = []
+        for i in range(max(map(len, blocks))):
+            for block in blocks:
 
+                # Здесь заканчиватся код Софушки
+                if i < len(block):
+                    result.append(block[i])
 
+        for i in range(max(map(len, corr_bytes))):
+            for corr in corr_bytes:
+                result.append(corr[i])
 
+        return ''.join(result)
 
